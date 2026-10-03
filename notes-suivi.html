@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Moyennes de classe · Suivi</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --fond:#121614; --carte:#1b211e; --bord:rgba(255,255,255,.07);
+    --texte:#f3ecdd; --texte-2:#98a29b; --texte-3:#66706a;
+    --vert:#79d6a2; --rose:#ff7a90; --rose-doux:#ffa6b4;
+    --vin:#2b1a1f;
+    --serif:Georgia,'Times New Roman',serif;
+    --sans:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{background:#000;color:var(--texte);font-family:var(--sans);
+    padding:14px 12px 56px;display:flex;justify-content:center}
+  .page{width:min(100%,680px)}
+  header.top{margin-bottom:6px}
+  h1{font-family:var(--serif);font-size:24px;letter-spacing:-.01em}
+  .sub{color:var(--texte-2);font-size:12px;margin-top:2px}
+  .controls{display:flex;gap:8px;margin:12px 0 4px}
+  .controls select{flex:1;min-width:0;background:var(--carte);color:var(--texte);
+    border:1px solid var(--bord);border-radius:12px;padding:0 12px;min-height:46px;
+    font:500 14px var(--sans);touch-action:manipulation}
+  .controls button{flex:none;cursor:pointer;font:700 14px var(--sans);color:var(--fond);
+    background:var(--vert);border:none;border-radius:12px;padding:0 18px;min-height:46px;
+    touch-action:manipulation}
+  .controls button:disabled{opacity:.5}
+  .pill{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;
+    padding:7px 12px;border-radius:999px;border:1px solid var(--bord);
+    background:var(--carte);color:var(--texte-2);margin-top:10px}
+  .pill i{width:8px;height:8px;border-radius:50%;background:var(--texte-3)}
+  .pill.ok i{background:var(--vert)} .pill.ko i{background:var(--rose)}
+  .tabs{position:sticky;top:0;z-index:5;display:flex;gap:8px;margin:12px -12px 0;padding:10px 12px;
+    background:rgba(0,0,0,.92);overflow-x:auto;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex:1 0 auto;cursor:pointer;border:1px solid var(--bord);background:var(--carte);
+    color:var(--texte-2);border-radius:12px;padding:0 18px;min-height:46px;
+    font:700 14px var(--sans);touch-action:manipulation;white-space:nowrap}
+  .tab.actif{background:var(--texte);color:var(--fond);border-color:var(--texte)}
+  .cartes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  .carte{background:var(--carte);border:1px solid var(--bord);border-radius:16px;padding:12px 10px}
+  .libelle{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--texte-2);text-align:center}
+  .gros{font-family:var(--serif);font-weight:700;font-size:32px;text-align:center;margin-top:2px}
+  .gros small{font-size:13px;color:var(--texte-2);font-weight:500}
+  .delta{text-align:center;font-size:12px;margin-top:2px;color:var(--texte-2)}
+  .delta b.plus{color:var(--vert)} .delta b.moins{color:var(--rose)}
+  .bloc{background:var(--carte);border:1px solid var(--bord);border-radius:16px;padding:14px;margin-top:10px}
+  .bloc h2{font-family:var(--serif);font-size:17px;margin-bottom:8px}
+  svg.chart{width:100%;height:auto;display:block}
+  .matiere{border-top:1px solid var(--bord);padding:12px 0}
+  .matiere:first-of-type{border-top:none;padding-top:4px}
+  .ligne1{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+  .nom{font-weight:700;font-size:15px}
+  .coef{font-size:10px;color:var(--texte-3);border:1px solid var(--bord);border-radius:6px;padding:1px 6px;white-space:nowrap}
+  .vals{margin-left:auto;text-align:right;white-space:nowrap}
+  .vals b{font-family:var(--serif);font-size:21px}
+  .vals span{font-size:12px;color:var(--texte-2)}
+  .barre{position:relative;height:10px;border-radius:99px;background:rgba(255,255,255,.06);margin:10px 0 4px}
+  .plage{position:absolute;top:0;bottom:0;border-radius:99px;background:rgba(121,214,162,.28)}
+  .marq{position:absolute;top:-3px;width:4px;height:16px;border-radius:2px;background:var(--vert)}
+  .marq.classe{background:var(--texte-2)}
+  .legende{display:flex;gap:12px;font-size:12px;color:var(--texte-2);margin-top:3px;flex-wrap:wrap}
+  .legende i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+  .vide{color:var(--texte-3);text-align:center;padding:28px 12px;font-size:14px;line-height:1.6}
+  .erreur{background:var(--vin);border:1px solid rgba(255,122,144,.35);color:var(--rose-doux);
+    border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.55;margin-top:12px}
+  .maj{text-align:center;color:var(--texte-3);font-size:12px;margin-top:14px}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="top">
+    <h1>Moyennes de classe</h1>
+    <div class="sub" id="soustitre">Collection Firestore · notes_suivi</div>
+    <div class="controls">
+      <select id="doc" title="Élève"></select>
+      <button id="btn">Actualiser</button>
+    </div>
+    <span class="pill" id="statut"><i></i><span>Connexion…</span></span>
+  </header>
+
+  <div class="tabs" id="periodes"></div>
+  <div id="contenu"></div>
+  <div class="maj" id="maj"></div>
+  <div id="erreur"></div>
+</div>
+
+<script>
+/* ── Firebase (projet ecoledirecte-client, lecture seule) ── */
+firebase.initializeApp({
+  apiKey: "AIzaSyBCZ4Ws6fj00_jvmVq8V7-nBBlEbvdHFVA",
+  authDomain: "ecoledirecte-client.firebaseapp.com",
+  projectId: "ecoledirecte-client",
+  storageBucket: "ecoledirecte-client.firebasestorage.app",
+  messagingSenderId: "807188142882"
+});
+const db = firebase.firestore();
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = v => (v === null || v === undefined || isNaN(v)) ? "—" : Number(v).toFixed(2).replace(".", ",");
+const pct = (v, min, max) => Math.max(0, Math.min(100, ((v - min) / ((max - min) || 1)) * 100));
+
+/* Groupes par élève : [{cle, label, docs:[...triés]}] — nouveau format = docs avec idPeriode */
+let GROUPES = [], groupeIdx = 0, periodeIdx = 0;
+
+function statut(ok, txt) {
+  const el = $("statut");
+  el.className = "pill" + (ok === true ? " ok" : ok === false ? " ko" : "");
+  el.querySelector("span").textContent = txt;
+}
+
+async function charger() {
+  $("btn").disabled = true;
+  $("erreur").innerHTML = "";
+  statut(null, "Chargement…");
+  try {
+    const snap = await db.collection("notes_suivi").get();
+    const tous = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+    const frais = tous.filter(d => d.idPeriode);
+    const anciens = tous.length - frais.length;
+    if (!frais.length) {
+      statut(false, "Aucune donnée");
+      $("contenu").innerHTML = anciens > 0
+        ? `<div class="vide">Ancien format détecté.<br>Ouvre l'app (onglet Notes) pour resynchroniser au nouveau format.</div>`
+        : `<div class="vide">Collection <b>notes_suivi</b> vide.<br>Ouvre l'app (onglet Notes) pour déclencher la synchro.</div>`;
+      return;
+    }
+    const carte = new Map();
+    frais.forEach(d => {
+      const cle = d.uid || d.identifiant || d.docId;
+      if (!carte.has(cle)) carte.set(cle, { cle, label: d.identifiant || d.uid || d.docId, docs: [] });
+      carte.get(cle).docs.push(d);
+    });
+    GROUPES = [...carte.values()];
+    GROUPES.forEach(g => g.docs.sort((a, b) => String(a.idPeriode).localeCompare(String(b.idPeriode))));
+    statut(true, GROUPES.length + " élève(s)");
+    const sel = $("doc");
+    sel.innerHTML = GROUPES.map((g, i) => `<option value="${i}">${esc(g.label)}</option>`).join("");
+    sel.value = Math.min(groupeIdx, GROUPES.length - 1);
+    groupeIdx = +sel.value || 0;
+    construirePeriodes();
+  } catch (e) {
+    statut(false, "Erreur");
+    const msg = /permission|PERMISSION/i.test(e.message || "")
+      ? "Accès refusé : publie la règle <b>match /notes_suivi/{docId} { allow read, write: if true; }</b> (Firestore → Rules)."
+      : "Firestore : " + esc(e.message || e);
+    $("erreur").innerHTML = `<div class="erreur">${msg}</div>`;
+  } finally {
+    $("btn").disabled = false;
+  }
+}
+
+function construirePeriodes() {
+  const g = GROUPES[groupeIdx];
+  const docs = g ? g.docs : [];
+  periodeIdx = Math.min(periodeIdx, Math.max(0, docs.length - 1));
+  $("periodes").innerHTML = docs.map((p, i) =>
+    `<button class="tab${i === periodeIdx ? " actif" : ""}" data-i="${i}">${esc(p.nom || p.idPeriode)}</button>`).join("");
+  document.querySelectorAll("#periodes .tab").forEach(b =>
+    b.onclick = () => { periodeIdx = +b.dataset.i; construirePeriodes(); });
+  afficher();
+  const p = docs[periodeIdx];
+  const maj = p && p.updatedAt ? new Date(p.updatedAt) : null;
+  $("maj").textContent = maj
+    ? "Mis à jour le " + maj.toLocaleDateString("fr-FR") + " à " + maj.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+    : "";
+  $("soustitre").textContent = "notes_suivi · " + (g ? g.label : "");
+}
+
+/* Courbe d'évolution (SVG, sans librairie) */
+function courbe(series, W, H) {
+  W = W || 640; H = H || 220;
+  const padL = 34, padR = 10, padT = 14, padB = 26;
+  let vals = [];
+  series.forEach(s => s.points.forEach(p => { if (p.y !== null && p.y !== undefined) vals.push(p.y); }));
+  if (!vals.length) return `<div class="vide">Pas de données pour le graphique.</div>`;
+  let min = Math.min(...vals), max = Math.max(...vals);
+  if (max - min < 1) { max += 0.5; min -= 0.5; }
+  const m = (max - min) * 0.15; max += m; min -= m;
+  min = Math.max(0, min); max = Math.min(20, max);
+  const n = Math.max(1, series[0].points.length);
+  const X = i => padL + (n > 1 ? i / (n - 1) : 0.5) * (W - padL - padR);
+  const Y = v => padT + (1 - (v - min) / (max - min)) * (H - padT - padB);
+  let svg = `<svg class="chart" viewBox="0 0 ${W} ${H}">`;
+  for (let g = 0; g <= 4; g++) {
+    const v = min + (max - min) * g / 4, y = Y(v);
+    svg += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="rgba(255,255,255,.08)" stroke-width="1"/>` +
+           `<text x="${padL - 5}" y="${y + 4}" fill="#66706a" font-size="10" text-anchor="end">${v.toFixed(0)}</text>`;
+  }
+  series.forEach(s => {
+    const pts = s.points.map((p, i) => [X(i), p.y === null || p.y === undefined ? null : Y(p.y)]);
+    const line = pts.filter(p => p[1] !== null);
+    if (line.length > 1) {
+      const d = "M" + line.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" L");
+      const aire = d + ` L${line[line.length - 1][0].toFixed(1)},${H - padB} L${line[0][0].toFixed(1)},${H - padB} Z`;
+      svg += `<path d="${aire}" fill="${s.couleur}22"/>` +
+             `<path d="${d}" fill="none" stroke="${s.couleur}" stroke-width="2.4" stroke-linecap="round"` +
+             (s.pointille ? ` stroke-dasharray="5 4"` : "") + `/>`;
+    }
+    pts.forEach(p => {
+      if (p[1] === null) return;
+      svg += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.4" fill="${s.couleur}"/>`;
+    });
+    s.points.forEach((p, i) => {
+      svg += `<text x="${X(i)}" y="${H - 8}" fill="#66706a" font-size="10" text-anchor="middle">${esc(p.x)}</text>`;
+    });
+  });
+  return svg + "</svg>";
+}
+
+function afficher() {
+  const g = GROUPES[groupeIdx];
+  const docs = g ? g.docs : [];
+  if (!docs.length) { $("contenu").innerHTML = `<div class="vide">Aucune période.</div>`; return; }
+  const p = docs[periodeIdx];
+  const mg = p.moyenneGenerale, mc = p.moyenneClasse;
+  const delta = (mg !== null && mg !== undefined && mc !== null && mc !== undefined) ? mg - mc : null;
+
+  const chart = courbe([
+    { points: docs.map(q => ({ x: q.nom || q.idPeriode, y: q.moyenneClasse })), couleur: "#98a29b", pointille: true },
+    { points: docs.map(q => ({ x: q.nom || q.idPeriode, y: q.moyenneGenerale })), couleur: "#79d6a2" }
+  ]);
+
+  let html = `<div class="cartes">
+    <div class="carte"><div class="libelle">Moyenne classe</div>
+      <div class="gros">${fmt(mc)} <small>/20</small></div></div>
+    <div class="carte"><div class="libelle">Ma moyenne</div>
+      <div class="gros">${fmt(mg)} <small>/20</small></div>
+      ${delta !== null ? `<div class="delta">${delta >= 0 ? "+" : ""}${fmt(delta)} pts <b class="${delta >= 0 ? "plus" : "moins"}">${delta >= 0 ? "au-dessus" : "en dessous"}</b></div>` : ""}
+    </div>
+  </div>
+  <div class="bloc"><h2>Évolution</h2>${chart}
+    <div class="legende"><span><i style="background:#98a29b"></i>Moyenne classe</span>
+    <span><i style="background:#79d6a2"></i>Ma moyenne</span></div>
+  </div>`;
+
+  html += `<div class="bloc"><h2>Matières — moyennes de classe</h2>`;
+  const matieres = p.matieres || [];
+  if (!matieres.length) html += `<div class="vide">Aucune matière.</div>`;
+  matieres.forEach(m => {
+    const lo = Math.min(m.minNote ?? m.moyenne ?? 0, m.moyenneClasse ?? 20);
+    const hi = Math.max(m.maxNote ?? m.moyenne ?? 0, m.moyenneClasse ?? 0);
+    const a = Math.max(0, lo - 1), b = Math.min(20, hi + 1);
+    html += `<div class="matiere">
+      <div class="ligne1"><span class="nom">${esc(m.matiere || "?")}</span>
+        ${m.coefficient ? `<span class="coef">coef ${String(m.coefficient).replace(".", ",")}</span>` : ""}
+        <span class="vals"><b>${fmt(m.moyenneClasse)}</b> <span>/ moi ${fmt(m.moyenne)}</span></span></div>
+      <div class="barre">
+        <div class="plage" style="left:${pct(m.minNote ?? m.moyenne ?? a, a, b)}%;width:${Math.max(1.5, pct(m.maxNote ?? m.moyenne ?? b, a, b) - pct(m.minNote ?? m.moyenne ?? a, a, b))}%"></div>
+        ${m.moyenneClasse !== null && m.moyenneClasse !== undefined ? `<div class="marq classe" style="left:calc(${pct(m.moyenneClasse, a, b)}% - 2px)"></div>` : ""}
+        ${m.moyenne !== null && m.moyenne !== undefined ? `<div class="marq" style="left:calc(${pct(m.moyenne, a, b)}% - 2px)"></div>` : ""}
+      </div>
+      <div class="legende"><span><i style="background:#98a29b"></i>moyenne classe</span><span><i style="background:#79d6a2"></i>ma moyenne</span><span>min ${fmt(m.minNote)} · max ${fmt(m.maxNote)} (moi)</span>
+      ${m.rang ? `<span>rang ${m.rang}${m.effectif ? "/" + m.effectif : ""}</span>` : ""}</div>
+    </div>`;
+  });
+  html += `</div>`;
+
+  $("contenu").innerHTML = html;
+}
+
+$("btn").onclick = charger;
+$("doc").onchange = e => { groupeIdx = +e.target.value || 0; periodeIdx = 0; construirePeriodes(); };
+charger();
+</script>
+</body>
+</html>
