@@ -60,7 +60,6 @@
   .barre{position:relative;height:10px;border-radius:99px;background:rgba(255,255,255,.06);margin:10px 0 4px}
   .plage{position:absolute;top:0;bottom:0;border-radius:99px;background:rgba(121,214,162,.28)}
   .marq{position:absolute;top:-3px;width:4px;height:16px;border-radius:2px;background:var(--vert)}
-  .marq.classe{background:var(--texte-2)}
   .legende{display:flex;gap:12px;font-size:12px;color:var(--texte-2);margin-top:3px;flex-wrap:wrap}
   .legende i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
   .vide{color:var(--texte-3);text-align:center;padding:28px 12px;font-size:14px;line-height:1.6}
@@ -184,8 +183,14 @@ function afficher() {
   </div>`;
 
   html += `<div class="bloc"><h2>Matières — moyennes de classe</h2>`;
-  const matieres = p.matieres || [];
-  if (!matieres.length) html += `<div class="vide">Aucune matière.</div>`;
+  const matieres = (p.matieres || []).filter(m => {
+    const code = (m.codeMatiere || "").toUpperCase();
+    const nom = (m.matiere || "").toUpperCase();
+    if (code === "EPS" || code === "MATEX") return false;
+    if (/SPORT|EXPERT/.test(nom)) return false;
+    return /MATH|PHYSIQUE/.test(code + " " + nom);
+  });
+  if (!matieres.length) html += `<div class="vide">Aucune matière (maths/physique).</div>`;
   matieres.forEach(m => {
     const lo = Math.min(m.minNote ?? m.moyenne ?? 0, m.moyenneClasse ?? 20);
     const hi = Math.max(m.maxNote ?? m.moyenne ?? 0, m.moyenneClasse ?? 0);
@@ -196,11 +201,9 @@ function afficher() {
         <span class="vals"><b>${fmt(m.moyenneClasse)}</b> <span>/ moi ${fmt(m.moyenne)}</span></span></div>
       <div class="barre">
         <div class="plage" style="left:${pct(m.minNote ?? m.moyenne ?? a, a, b)}%;width:${Math.max(1.5, pct(m.maxNote ?? m.moyenne ?? b, a, b) - pct(m.minNote ?? m.moyenne ?? a, a, b))}%"></div>
-        ${m.moyenneClasse !== null && m.moyenneClasse !== undefined ? `<div class="marq classe" style="left:calc(${pct(m.moyenneClasse, a, b)}% - 2px)"></div>` : ""}
         ${m.moyenne !== null && m.moyenne !== undefined ? `<div class="marq" style="left:calc(${pct(m.moyenne, a, b)}% - 2px)"></div>` : ""}
       </div>
-      <div class="legende"><span><i style="background:#98a29b"></i>moyenne classe</span><span><i style="background:#79d6a2"></i>ma moyenne</span><span>min ${fmt(m.minNote)} · max ${fmt(m.maxNote)} (moi)</span>
-      ${m.rang ? `<span>rang ${m.rang}${m.effectif ? "/" + m.effectif : ""}</span>` : ""}</div>
+      <div class="legende"><span><i style="background:#79d6a2"></i>ma moyenne</span><span>min ${fmt(m.minNote)} · max ${fmt(m.maxNote)} (moi)</span>
     </div>`;
   });
   html += `</div>`;
